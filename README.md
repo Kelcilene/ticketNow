@@ -36,9 +36,9 @@ npm install  # ou yarn install
 
 ### **5️⃣ Iniciar o Servidor**
 ```sh
-npm start  # ou yarn start
+node src/system
 ```
-🔗 O servidor será iniciado em `http://localhost:5000`.
+🔗 O servidor será iniciado em `http://localhost:3000`.
 
 ---
 

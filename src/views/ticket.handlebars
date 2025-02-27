@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Detalhes do Ingresso</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f4;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 20px auto;
+            padding: 20px;
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .navigation {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 15px;
+            margin-bottom: 10px;
+        }
+
+        .navigation a {
+            text-decoration: none;
+            margin: 0;
+            color: #007bff;
+            font-weight: bold;
+            transition: color 0.3s;
+        }
+
+        .navigation a:hover {
+            color: #0056b3;
+        }
+
+        #ticketsList {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            justify-content: center;
+        }
+
+        .ticket {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+            padding: 15px;
+            width: 250px;
+            transition: transform 0.2s;
+        }
+
+        .ticket:hover {
+            transform: translateY(-2px);
+        }
+
+        .ticket p {
+            margin: 10px 0;
+        }
+
+        .ticket strong {
+            font-size: 1.2em;
+            color: #28a745;
+        }
+
+        input[type="number"] {
+            padding: 5px;
+            width: 60px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            margin-top: 5px;
+        }
+
+        button {
+            padding: 10px;
+            border: none;
+            background-color: #28a745;
+            color: white;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background 0.3s;
+            width: 100%;
+        }
+
+        button:hover {
+            background-color: #218838;
+        }
+
+        .error {
+            color: red;
+            text-align: center;
+            margin-top: 20px;
+        }
+
+        .manage-button {
+            display: block;
+            margin: 20px auto;
+            text-align: center;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            margin-top: 0px;
+        }
+
+        h1 {
+            margin: 0;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Detalhes do Ingresso</h1>
+            <div class="navigation">
+                <a href="/login">Login</a>
+                <a href="/history">Histórico</a>
+                <div id="managementBtn"></div>
+            </div>
+        </div>
+
+
+        <div id="ticketsList"></div>
+    </div>
+
+    <script>
+        async function fetchTickets() {
+            try {
+                const response = await fetch('/tickets', {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    }
+                });
+
+                if (!response.ok)
+                    throw new Error(`Erro na requisição: ${response.status}`);
+
+                const ticketsData = await response.json();
+
+                if (!ticketsData || !ticketsData.tickets || !Array.isArray(ticketsData.tickets))
+                    throw new Error("Formato inesperado da resposta");
+
+                displayTickets(ticketsData.tickets, ticketsData.isAuthenticated, ticketsData.isAdmin);
+            } catch (error) {
+                console.error("Erro ao buscar ingressos:", error);
+                document.getElementById('ticketsList').innerHTML = `<p class="error">Erro ao carregar ingressos. Tente novamente mais tarde.</p>`;
+            }
+        }
+
+        function displayTickets(tickets, isAuthenticated, isAdmin) {
+            const ticketsList = document.getElementById('ticketsList');
+            const managementBtn = document.getElementById('managementBtn');
+            ticketsList.innerHTML = '';
+
+            if (isAuthenticated && isAdmin) {
+                const manageButton = document.createElement('a');
+                manageButton.href = "/manageTickets";
+                manageButton.innerHTML = 'Área do Gestor';
+                manageButton.classList.add('manage-button');
+                manageButton.style.backgroundColor = '#007bff';
+                manageButton.style.color = 'white';
+                manageButton.style.padding = '10px 15px';
+                manageButton.style.borderRadius = '5px';
+                manageButton.style.display = 'inline-block';
+                manageButton.style.textDecoration = 'none';
+                manageButton.style.textAlign = 'center';
+                managementBtn.appendChild(manageButton);
+            }
+
+            if (!tickets.length) {
+                ticketsList.innerHTML += "<p>Nenhum ingresso disponível no momento.</p>";
+                return;
+            }
+
+            tickets.forEach(ticket => {
+                const ticketElement = document.createElement('div');
+                ticketElement.classList.add('ticket');
+
+                ticketElement.innerHTML = `
+                    <p><strong>${ticket.name}</strong></p>
+                    <p>Preço: R$ ${ticket.price}</p>
+                    <p>Estoque: ${ticket.stock}</p>
+                    ${ticket.stock > 0 ? `
+                        <div style="display:flex;align-items: center;justify-content: space-between;">
+                            <label for="ticketQuantity_${ticket._id}">Quantidade:</label>
+                            <input type="number" id="ticketQuantity_${ticket._id}" min="1" max="${ticket.stock}" value="1">
+                        </div>
+                        <button onclick="buyTicket('${ticket._id}')" class="sale">Comprar</button>
+                    ` : '<p style="color: red;">Esgotado</p>'}
+                `;
+
+                ticketsList.appendChild(ticketElement);
+            });
+        }
+
+        async function buyTicket(ticketId) {
+            const token = localStorage.getItem('token');
+
+            const quantityInput = document.getElementById(`ticketQuantity_${ticketId}`);
+            if (!quantityInput) return;
+            const quantityUsed = quantityInput.value;
+            const confirmation = confirm("Atenção: Política de Cancelamento:\n\nCompras não podem ser canceladas após a conclusão.\n\nVocê deseja continuar com a compra?");
+            if (!confirmation) return;
+
+            try {
+                const response = await fetch('/tickets/buy', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ ticketId, quantityUsed })
+                });
+
+                if (!response.ok) {
+                    const data = await response.json();
+                    throw new Error(data.message || 'Erro ao comprar o ingresso.');
+                }
+
+                alert('Ingresso(s) comprado(s) com sucesso!');
+                window.location.reload();
+            } catch (error) {
+                alert(error.message);
+            }
+        }
+
+        fetchTickets();
+    </script>
+
+</body>
+
+</html>

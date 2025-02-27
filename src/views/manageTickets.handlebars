@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="pt">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gerenciar Ingressos</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            padding: 0;
+            background-color: #f4f4f4;
+        }
+
+        h1,
+        h2 {
+            color: #333;
+        }
+
+        form {
+            background: white;
+            padding: 15px;
+            margin-bottom: 15px;
+            max-width: 425px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        input {
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            width: 400px;
+        }
+
+        button {
+            padding: 10px 15px;
+            border: none;
+            background-color: #28a745;
+            color: white;
+            cursor: pointer;
+            border-radius: 5px;
+            transition: background 0.3s;
+        }
+
+        button:hover {
+            background-color: #218838;
+        }
+
+        ul {
+            list-style: none;
+            padding: 0;
+        }
+
+        li {
+            background: white;
+            padding: 15px;
+            margin-bottom: 10px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+            transition: transform 0.2s;
+        }
+
+        li:hover {
+            transform: translateY(-2px);
+        }
+
+        .remove-btn {
+            background-color: #dc3545;
+            border-radius: 5px;
+        }
+
+        .remove-btn:hover {
+            background-color: #c82333;
+        }
+
+        .edit-form {
+            display: none;
+            flex-direction: column;
+            gap: 5px;
+            margin-top: 10px;
+        }
+
+        .edit-form input {
+            width: 80%;
+        }
+
+        .edit-button {
+            background-color: #007bff;
+            color: white;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        .edit-button:hover {
+            background-color: #0069d9;
+        }
+    </style>
+</head>
+
+<body>
+    <a href="/ticket">Tickets</a>
+
+    <h1>Gerenciar Ingressos</h1>
+
+    <form id="createTicketForm">
+        <input type="text" name="name" placeholder="Nome do ingresso" required>
+        <input type="number" name="price" placeholder="Preço" required>
+        <input type="number" name="stock" placeholder="Estoque" required>
+        <button type="submit">Criar Ingresso</button>
+    </form>
+
+    <h2>Ingressos Existentes</h2>
+    <ul id="ticketList"></ul>
+
+    <script>
+        const token = localStorage.getItem('token');
+
+        async function fetchTickets() {
+            try {
+                const response = await fetch('/tickets', {
+                    method: 'GET',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (!response.ok) throw new Error("Erro ao buscar ingressos");
+
+                const data = await response.json();
+                const tickets = data.tickets;
+
+                if (!Array.isArray(tickets))
+                    throw new Error("Os dados recebidos não são um array");
+
+                const ticketList = document.getElementById('ticketList');
+                ticketList.innerHTML = '';
+
+                tickets.forEach(ticket => {
+                    const listItem = document.createElement('li');
+                    listItem.id = `ticket-${ticket._id}`;
+
+                    const purchased = ticket.stockInitial - ticket.stock;
+                    const isEditable = purchased === 0;
+
+                    listItem.innerHTML = `
+                        <span>${ticket.name} - R$ ${ticket.price} - ${ticket.stockInitial} disponíveis - ${purchased} comprados</span>
+                        <div>
+                            <button class="remove-btn" onclick="removeTicket('${ticket._id}')">Remover</button>
+                            <button class="edit-button" onclick="toggleEditForm('${ticket._id}')" ${isEditable ? '' : 'disabled'}>Editar</button>
+                            <form id="editForm-${ticket._id}" class="edit-form">
+                                <input type="number" name="price" placeholder="Novo Preço" required>
+                                <input type="number" name="stockInitial" placeholder="Novo Estoque" required>
+                                <button type="submit" onclick="editTicket(event, '${ticket._id}')">Salvar</button>
+                                <button type="button" class="close-btn" onclick="toggleEditForm('${ticket._id}')">Fechar</button>
+                            </form>
+                        </div>
+                    `;
+                    ticketList.appendChild(listItem);
+                });
+
+            } catch (error) {
+                alert(error.message);
+            }
+        }
+
+        function toggleEditForm(ticketId) {
+            const form = document.getElementById(`editForm-${ticketId}`);
+            form.style.display = form.style.display === 'none' || form.style.display === '' ? 'flex' : 'none';
+        }
+
+        document.getElementById('createTicketForm').addEventListener('submit', async function (event) {
+            event.preventDefault();
+
+            const formData = new FormData(this);
+            const data = Object.fromEntries(formData);
+
+            if (!data.price || !data.stock) {
+                alert("Por favor, preencha o preço e o estoque.");
+                return;
+            }
+
+            try {
+                const response = await fetch('/tickets/create', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify(data),
+                });
+
+                if (!response.ok) {
+                    throw new Error("Erro ao criar ingresso");
+                }
+
+                alert('Ingresso criado com sucesso!');
+                window.location.reload();
+            } catch (error) {
+                alert(error.message);
+            }
+        });
+
+        async function removeTicket(ticketId) {
+            try {
+                const response = await fetch(`/tickets/delete/${ticketId}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (!response.ok) throw new Error("Erro ao remover ingresso");
+
+                alert('Ingresso removido com sucesso!');
+                document.getElementById(`ticket-${ticketId}`).remove();
+            } catch (error) {
+                alert(error.message);
+            }
+        }
+
+        async function editTicket(event, ticketId) {
+            event.preventDefault();
+
+            const form = document.getElementById(`editForm-${ticketId}`);
+            const formData = new FormData(form);
+            const data = Object.fromEntries(formData);
+
+            if (!data.price || !data.stockInitial) {
+                alert("Por favor, preencha o preço e o estoque.");
+                return;
+            }
+
+            try {
+                const response = await fetch(`/tickets/edit/${ticketId}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify(data),
+                });
+
+                if (!response.ok) throw new Error("Erro ao editar ingresso");
+
+                alert('Ingresso editado com sucesso!');
+                window.location.reload();
+            } catch (error) {
+                window.location.reload();
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', fetchTickets());
+    </script>
+
+</body>
+
+</html>
